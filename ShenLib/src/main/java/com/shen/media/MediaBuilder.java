@@ -3,7 +3,6 @@ package com.shen.media;
 import android.media.MediaCodecInfo;
 import android.util.Log;
 import android.util.Size;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +19,6 @@ public class MediaBuilder {
         return configer;
     }
 
-
     /**
      * 设置像素宽高
      * @param width
@@ -32,7 +30,6 @@ public class MediaBuilder {
         configer.setHeight(height);
         return this;
     }
-
     /**
      * 设置比特率
      * @param bit
@@ -50,7 +47,6 @@ public class MediaBuilder {
         configer.setFps(fps);
         return this;
     }
-
     /**
      * 设置编码器颜色格式
      * @param colorFormat
@@ -60,8 +56,6 @@ public class MediaBuilder {
         configer.setEncodeColorFormat(colorFormat);
         return this;
     }
-
-
 
     public static MediaConfiger getLocalDefaultConfiger(){
         MediaBuilder builder=new MediaBuilder();
