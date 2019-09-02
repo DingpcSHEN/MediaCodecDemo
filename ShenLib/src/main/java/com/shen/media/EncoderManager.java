@@ -1,0 +1,236 @@
+package com.shen.media;
+
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
+import android.support.annotation.NonNull;
+import android.util.Log;
+
+import com.shen.tools.ToolDebug;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+
+public class EncoderManager {
+    private static final String LOG_TAG="EncodeManager";
+
+    //支持的编码器列表
+    private List<EncoderInfo> supportEncoderList=new ArrayList<>();
+
+    /**
+     * 单例模式
+     */
+    private static EncoderManager instance =null;
+    public static EncoderManager getInstance(){
+        if(instance==null){
+            synchronized (EncoderManager.class){
+                if(instance==null) {
+                    instance = new EncoderManager();
+                }
+            }
+        }
+        return instance;
+    }
+    private EncoderManager(){
+        int numCodecs = MediaCodecList.getCodecCount();
+        for(int i=0;i<numCodecs;i++){
+            MediaCodecInfo codecInfo = MediaCodecList.getCodecInfoAt(i);
+            if(codecInfo.isEncoder()) {
+                supportEncoderList.add(new EncoderInfo(codecInfo));
+            }
+        }
+    }
+
+    /**
+     * 获取默认支持H264的编解码器
+     * @return
+     */
+    public EncoderInfo getEncoderH264(){
+        for (EncoderInfo encoderInfo : supportEncoderList) {
+            if(encoderInfo.isSupportH264()){
+                return encoderInfo;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 判断配置参数是否支持 当前只判断H264
+     * @param configer
+     * @return
+     */
+    public boolean isSupportConfiger(@NonNull MediaConfiger configer){
+        //遍历的编码器
+        for (EncoderInfo encoderInfo : supportEncoderList) {
+            if(encoderInfo.isSupportH264(configer.getEncodeColorFormat())){
+                Log.d(LOG_TAG,"isSupportConfiger H264--------->configer.getColorFormat("+configer.getEncodeColorFormat()+")");
+                if(encoderInfo.isSupportSizeH264(configer.getWidth(),configer.getHeight(),
+                        configer.getFps(),configer.getBitRate())){
+                    Log.d(LOG_TAG,"isSupportConfiger H264--------->configer.size("+configer.getWidth()+" x "+configer.getHeight()+")"+" fps("+configer.getFps()+") bitrate("+configer.getBitRate()+")");
+                    return true;
+                }
+            }
+        }
+        Log.d(LOG_TAG,"isSupportConfiger return flase--------->not found");
+        return false;
+    }
+
+
+
+    /**
+     * 启动一个编码器进行编码
+     * @param configer
+     * @return
+     */
+    public EncoderProxy startEncode(@NonNull MediaConfiger configer, EncoderProxy.CallBack callBack){
+        EncoderProxy encoder = EncoderProxy.createEncoder(configer);
+        if(encoder!=null){
+            encoder.start(callBack);        //开始编码
+        }
+        return encoder;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /**
+     * 支持的编码器信息
+     * 使用代理方式 只有isEncoder为true的时候才构造需要外部控制
+     */
+    public class EncoderInfo{
+        private MediaCodecInfo mediaCodecInfo;
+        private String[] typeList;
+        public EncoderInfo(@NonNull MediaCodecInfo codecInfo){
+            this.mediaCodecInfo=codecInfo;
+            this.typeList=codecInfo.getSupportedTypes();
+        }
+
+
+
+
+        /**
+         * 判断是否支持H264
+         * @return
+         */
+        public boolean isSupportH264(){
+            for(String type:typeList){
+                if(type.equals("video/avc")) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        /**
+         * 判断是否支持H264
+         * @param colorFormat 颜色格式
+         * @return
+         */
+        public boolean isSupportH264(int colorFormat){
+            for(String type:typeList){
+                if(type.equals("video/avc")) {
+                    MediaCodecInfo.CodecCapabilities cap = mediaCodecInfo.getCapabilitiesForType("video/avc");
+                    for(int colorID:cap.colorFormats){
+                        if(colorID==colorFormat)return true;
+                    }
+                }
+            }
+            return false;
+        }
+        /**
+         * 判断是否支持H264指定的大小
+         * @param width
+         * @param height
+         * @param fps
+         * @param bitrate
+         * @return
+         */
+        public boolean isSupportSizeH264(int width,int height,int fps,int bitrate){
+            MediaCodecInfo.CodecCapabilities cap = mediaCodecInfo.getCapabilitiesForType("video/avc");
+            MediaCodecInfo.VideoCapabilities videoCap = cap.getVideoCapabilities();
+            if (videoCap != null) {
+                //判断是否支持视频像素宽高
+                if (!videoCap.getSupportedWidths().contains(width)) {
+                    Log.d(LOG_TAG, "isSupportSizeH264 return false--------->no contain width(" + width + ")");
+                    return false;
+                } else if (!videoCap.getSupportedHeightsFor(width).contains(height)) {
+                    Log.d(LOG_TAG, "isSupportSizeH264 return false--------->no contain height(" + height + ")");
+                    return false;
+                }
+                Log.d(LOG_TAG, "isSupportSizeH264 support size--------->" + width + "x" + height);
+                //判断是否支持帧率
+                if(fps>0) {
+                    if (!videoCap.getSupportedFrameRatesFor(width, height).contains((double) fps)) {
+                        Log.d(LOG_TAG, "isSupportSizeH264 return false--------->no contain fps(" + fps + ")");
+                        return false;
+                    }
+                    Log.d(LOG_TAG, "isSupportSizeH264 support fps--------->" + fps);
+                }
+                //判断是否支持比特率
+                if(bitrate>0) {
+                    if (!videoCap.getBitrateRange().contains(bitrate)) {
+                        Log.d(LOG_TAG, "isSupportSizeH264 return false--------->no contain bitrate(" + bitrate + ")");
+                        return false;
+                    }
+                    Log.d(LOG_TAG, "isSupportSizeH264 support bitrate--------->" + bitrate);
+                }
+                return true;
+            }
+            return false;
+        }
+        @Override
+        public String toString() {
+            JSONObject jsonObject=new JSONObject();
+            try {
+                jsonObject.put("name",mediaCodecInfo.getName());
+                jsonObject.put("encode",mediaCodecInfo.isEncoder());
+                JSONArray jsonArray=new JSONArray();
+                for (String type : typeList) {
+                    MediaCodecInfo.CodecCapabilities cap = mediaCodecInfo.getCapabilitiesForType(type);
+                    MediaCodecInfo.VideoCapabilities videoCap= cap.getVideoCapabilities();
+                    JSONObject typeObj = new JSONObject();
+                    typeObj.put("name",type);
+                    typeObj.put("mineType",cap.getMimeType());
+                    typeObj.put("color",Arrays.toString(cap.colorFormats));
+                    typeObj.put("width",videoCap.getSupportedWidths().toString());
+                    typeObj.put("height",videoCap.getSupportedHeights().toString());
+                    typeObj.put("bitrate",videoCap.getBitrateRange());
+                    typeObj.put("fps",videoCap.getSupportedFrameRates());
+                    typeObj.put("widthAlignment",videoCap.getWidthAlignment());
+                    typeObj.put("heightAlignment",videoCap.getHeightAlignment());
+                    jsonArray.put(typeObj);
+                }
+                jsonObject.put("typeList",jsonArray);
+            }catch (Exception e){
+            }
+            return jsonObject.toString();
+        }
+    }
+
+
+
+
+
+
+
+
+    public void showEncoderList(){
+        for(EncoderInfo info:supportEncoderList){
+            ToolDebug.printLogE(this,info.toString());
+        }
+    }
+
+}
